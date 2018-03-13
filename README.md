@@ -39,7 +39,7 @@
 ```/*
 * J(y)：在状态y时的评价函数值
 * Y(i)：表示当前状态
-* Y(i+1)：表示新的状态
+* Y(i+1)：表示下一个状态
 * r： 用于控制降温的快慢
 * T： 系统的温度，系统初始应该要处于一个高温的状态
 * T_min ：温度的下限，若温度T达到T_min，则停止搜索
@@ -47,11 +47,11 @@
 while( T > T_min )
 {
 　　dE = J( Y(i+1) ) - J( Y(i) ) ; 
-　　if ( dE >=0 ) //表达移动后得到更优解，则总是接受移动
+　　if ( dE >=0 ) //说明移动后得到更优解，则总是接受移动
 Y(i+1) = Y(i) ; //接受从Y(i)到Y(i+1)的移动
 　　else
 　　{
-// 函数exp( dE/T )的取值范围是(0,1) ，dE/T越大，则exp( dE/T )也
+// 函数exp( dE/T )的取值范围是(0,1) ，dE/T越大，则exp( dE/T )也越大
 if ( exp( dE/T ) > random( 0 , 1 ) )
 Y(i+1) = Y(i) ; //接受从Y(i)到Y(i+1)的移动
 　　}
@@ -60,7 +60,136 @@ Y(i+1) = Y(i) ; //接受从Y(i)到Y(i+1)的移动
 　　* 若r过大，则搜索到全局最优解的可能会较高，但搜索的过程也就较长。若r过小，则搜索的过程会很快，但最终可能会达到一个局部最优值
 　　*/
 　　i ++ ;
-}```
+}
+```
 
+### 旅行商问题（TSP）
+有若干个城市，任何两个城市之间的距离都是确定的，现要求一旅行商从某城市出发必须经过每一个城市且只在一个城市逗留一次，最后回到出发的城市，问如何事先确定一条最短的线路已保证其旅行的费用最少？
 
+现利用一个现成的城市信息，并给出其利用模拟退火算法的C代码：
+```/*
+ * 使用模拟退火算法(SA)求解TSP问题(以中国TSP问题为例)
+ * 参考自《Matlab 智能算法30个案例分析》
+ * 模拟退火的原理这里略去，可以参考上书或者相关论文
+ * update: 16/12/11
+ * author:lyrichu
+ * email:919987476@qq.com
+ */
+#include<stdio.h>
+#include<stdlib.h>
+#include<string.h>
+#include<time.h>
+#include<math.h>
+#define T0 50000.0  // 初始温度
+#define T_end (1e-8)
+#define q  0.98   // 退火系数
+#define L 1000  // 每个温度时的迭代次数，即链长
+#define N 31  // 城市数量
+int city_list[N]; // 用于存放一个解
+double city_pos[N][2] = {{1304,2312},{3639,1315},{4177,2244},{3712,1399},{3488,1535},{3326,1556},{3238,1229},{4196,1004},{4312,790},
+    {4386,570},{3007,1970},{2562,1756},{2788,1491},{2381,1676},{1332,695},{3715,1678},{3918,2179},{4061,2370},{3780,2212},{3676,2578},{4029,2838},
+    {4263,2931},{3429,1908},{3507,2367},{3394,2643},{3439,3201},{2935,3240},{3140,3550},{2545,2357},{2778,2826},{2370,2975}}; // 中国31个城市坐标
+//函数声明
+double distance(double *,double *); // 计算两个城市距离
+double path_len(int *);  // 计算路径长度
+void  init();  //初始化函数
+void create_new(); // 产生新解
+// 距离函数
+double distance(double * city1,double * city2)
+{
+    double x1 = *city1;
+    double y1 = *(city1+1);
+    double x2 = *(city2);
+    double y2 = *(city2+1);
+    double dis = sqrt((x1-x2)*(x1-x2)+(y1-y2)*(y1-y2));
+    return dis;
+}
 
+// 计算路径长度
+double path_len(int * arr)
+{
+    double path = 0; // 初始化路径长度
+    int index = *arr; // 定位到第一个数字(城市序号)
+    for(int i=0;i<N-1;i++)
+    {
+        int index1 = *(arr+i);
+        int index2 = *(arr+i+1);
+        double dis = distance(city_pos[index1-1],city_pos[index2-1]);
+        path += dis;
+    }
+    int last_index = *(arr+N-1); // 最后一个城市序号
+    int first_index = *arr; // 第一个城市序号
+    double last_dis = distance(city_pos[last_index-1],city_pos[first_index-1]);
+    path = path + last_dis;
+    return path; // 返回总的路径长度
+}
+
+// 初始化函数
+void init()
+{
+    for(int i=0;i<N;i++)
+        city_list[i] = i+1;  // 初始化一个解
+}
+
+// 产生一个新解
+// 此处采用随机交叉两个位置的方式产生新的解
+void create_new()
+{
+    double r1 = ((double)rand())/(RAND_MAX+1.0);
+    double r2 = ((double)rand())/(RAND_MAX+1.0);
+    int pos1 = (int)(N*r1); //第一个交叉点的位置
+    int pos2 = (int)(N*r2);
+    int temp = city_list[pos1];
+    city_list[pos1] = city_list[pos2];
+    city_list[pos2] = temp;   // 交换两个点
+}
+
+// 主函数
+int main(void)
+{
+    srand((unsigned)time(NULL)); //初始化随机数种子
+    time_t start,finish;
+    start = clock(); // 程序运行开始计时
+    double T;
+    int count = 0; // 记录降温次数
+    T = T0; //初始温度
+    init(); //初始化一个解
+    int city_list_copy[N]; // 用于保存原始解
+    double f1,f2,df; //f1为初始解目标函数值，f2为新解目标函数值，df为二者差值
+    double r; // 0-1之间的随机数，用来决定是否接受新解
+    while(T > T_end) // 当温度低于结束温度时，退火结束
+    {
+        for(int i=0;i<L;i++)
+        {
+            memcpy(city_list_copy,city_list,N*sizeof(int)); // 复制数组
+            create_new(); // 产生新解
+            f1 = path_len(city_list_copy);
+            f2 = path_len(city_list);
+            df = f2 - f1;
+            // 以下是Metropolis准则
+            if(df >= 0)
+            {
+                r = ((double)rand())/(RAND_MAX);
+                if(exp(-df/T) <= r) // 保留原来的解
+                {
+                    memcpy(city_list,city_list_copy,N*sizeof(int));
+                }
+            }
+        }
+        T *= q; // 降温
+        count++;
+    }
+    finish = clock(); // 退火过程结束
+    double duration = ((double)(finish-start))/CLOCKS_PER_SEC; // 计算时间
+    printf("采用模拟退火算法，初始温度T0=%.2f,降温系数q=%.2f,每个温度迭代%d次,共降温%d次，得到的TSP最优路径为:\n",T0,q,L,count);
+    for(int i=0;i<N-1;i++)  // 输出最优路径
+    {
+        printf("%d--->",city_list[i]);
+    }
+    printf("%d\n",city_list[N-1]);
+    double len = path_len(city_list); // 最优路径长度
+    printf("最优路径长度为:%lf\n",len);
+    printf("程序运行耗时:%lf秒.\n",duration);
+    return 0;
+}
+```
